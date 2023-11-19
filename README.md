@@ -115,19 +115,28 @@ const CreateUserTaskType = "createUser"
 
 // CreateUser define the dependencies to create user asynchronously by jobs.
 type CreateUser struct {
-    userStore: userStore
+    registerUseCase: registerUseCase
 }
 
 // NewCreateUser initializes a CreateUser job.
-func NewCreateUser(userStore UserStore) CreateUser {
+func NewCreateUser(registerUseCase registerUseCase) CreateUser {
     return CreateUser {
-        userStore: userStore,
+        registerUseCase: registerUseCase,
     }
 }
 
 // ProcessTask is the create user asychornous execution method.
 func (cu *CreateUser) ProcessTask (ctx context.Context, task *jobs.Task) error {
-    // create user code...
+    var user entities.User
+    if err := json.Unmarshal(task.Payload(), &user); err != nil {
+        return fmt.Errorf("json.Unmarshal, %w", err)
+    }
+    
+    if _, err := cu.registerUseCase.Execute(ctx, user); err != nil {
+        return fmt.Errorf("cu.registerUseCase.Execute, %w, err")
+    }
+
+    return nil
 }
 ```
 
