@@ -4,17 +4,43 @@ import (
 	"fmt"
 
 	"github.com/hibiken/asynq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 // Client is a wrapper around asynq.Client.
 type Client struct {
 	asynqClient *asynq.Client
+	gormDB      *gorm.DB
 }
 
+// ClientOption is a function for optional params that allow custom
+// configurations for the server.
+type ClientOption func(s *Server) error
+
 // New returns a new client.
-func New(redisURL string) *Client {
+func New(redisURL string, options ...ClientOption) *Client {
 	return &Client{
 		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: "localhost:6379"}),
+	}
+}
+
+// WithClientDBMiddleware is a ClientOption that allows to set a custom database
+// middleware, to store the tasks (an its statuses) in a database.
+func WithClientDBMiddleware(postgresURL string) ClientOption {
+	return func(s *Server) error {
+		db, err := gorm.Open(postgres.Open(postgresURL), &gorm.Config{})
+		if err != nil {
+			return fmt.Errorf("failed to connect database: %v", err)
+		}
+
+		if err = db.AutoMigrate(&dbTaskInfo{}); err != nil {
+			return fmt.Errorf("failed to migrate database: %v", err)
+		}
+
+		s.gormDB = db
+
+		return nil
 	}
 }
 
@@ -27,6 +53,13 @@ func (c *Client) Close() {
 func (c *Client) Enqueue(t Task) error {
 	if _, err := c.asynqClient.Enqueue(t.toAsynqTask()); err != nil {
 		return fmt.Errorf(":c.asynqClient.Enqueue %w", err)
+	}
+
+	if c.gormDB != nil {
+		taskInfo := t.toTaskInfo(TaskInfoStatusPending)
+		if err := c.gormDB.Create(taskInfo.toDBTaskInfo()).Error; err != nil {
+			return fmt.Errorf("c.gormDB.Create %w", err)
+		}
 	}
 
 	return nil
