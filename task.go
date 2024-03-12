@@ -3,16 +3,27 @@ package jobs
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 )
 
 // Task is the definition of a task and its options.
 type Task struct {
-	kind    string
-	payload []byte
+	ID      string
+	Kind    string
+	Payload []byte
 
 	maxRetry int
 	timeout  time.Duration
+}
+
+func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
+	return &TaskInfo{
+		ID:       t.ID,
+		TaskType: t.Kind,
+		Payload:  string(t.Payload),
+		Status:   status,
+	}
 }
 
 // TaskOption is a function for optional params that allow custom
@@ -22,8 +33,9 @@ type TaskOption func(t *Task)
 // NewTask creates a new task.
 func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 	t := Task{
-		kind:    kind,
-		payload: payload,
+		ID:      uuid.NewString(),
+		Kind:    kind,
+		Payload: payload,
 	}
 
 	for _, option := range options {
@@ -49,5 +61,17 @@ func Timeout(d time.Duration) TaskOption {
 
 func (t Task) toAsynqTask() *asynq.Task {
 	return asynq.NewTask(
-		t.kind, t.payload, asynq.MaxRetry(t.maxRetry), asynq.Timeout(t.timeout))
+		t.Kind, t.Payload,
+		asynq.MaxRetry(t.maxRetry),
+		asynq.Timeout(t.timeout),
+		asynq.TaskID(t.ID),
+	)
+}
+
+func fromAsynqTask(task *asynq.Task) Task {
+	return Task{
+		ID:      task.ResultWriter().TaskID(),
+		Kind:    task.Type(),
+		Payload: task.Payload(),
+	}
 }

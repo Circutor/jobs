@@ -2,8 +2,10 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hibiken/asynq"
+	"gorm.io/gorm"
 )
 
 // Handler is the definition of a Handler func for job execution
@@ -13,6 +15,7 @@ type Handler func(context.Context, *Task) error
 // kinds of jobs with their handlers.
 type ServerMux struct {
 	handlers map[string]Handler
+	gormDB   *gorm.DB
 }
 
 // NewServerMux returns a new server mux.
@@ -30,18 +33,60 @@ func (m *ServerMux) HandleFunc(kind string, handler Handler) {
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
 		return originalHandler(ctx, &Task{
-			kind:    t.Type(),
-			payload: t.Payload(),
+			ID:      t.ResultWriter().TaskID(),
+			Kind:    t.Type(),
+			Payload: t.Payload(),
 		})
 	}
 }
 
-func (m *ServerMux) asynqServerMux() *asynq.ServeMux {
+func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
+	// TODO: Likely the gormDB should be a field of ServerMux set during
+	// initialization.
+	m.gormDB = gormDB
+
 	asynqMux := asynq.NewServeMux()
+	asynqMux.Use(m.dbMiddleware)
 
 	for kind, handler := range m.handlers {
 		asynqMux.HandleFunc(kind, wrapHandler(handler))
 	}
 
 	return asynqMux
+}
+
+func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
+	return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+		jobsTask := fromAsynqTask(t)
+
+		if m.gormDB != nil {
+			taskInfo := jobsTask.toTaskInfo(TaskInfoStatusRunning)
+			//nolint staticcheck
+			if err := m.gormDB.Updates(taskInfo.toDBTaskInfo()).Error; err != nil {
+				// TODO: log error
+			}
+		}
+
+		var err error
+		defer func() {
+			if m.gormDB != nil {
+				status := TaskInfoStatusFinished
+				if err != nil {
+					status = TaskInfoStatusFailed
+				}
+
+				taskInfo := jobsTask.toTaskInfo(status)
+				//nolint staticcheck
+				if err := m.gormDB.Updates(taskInfo.toDBTaskInfo()).Error; err != nil {
+					// TODO: log error
+				}
+			}
+		}()
+
+		if err = h.ProcessTask(ctx, t); err != nil {
+			return fmt.Errorf("h.ProcessTask %w", err)
+		}
+
+		return nil
+	})
 }
