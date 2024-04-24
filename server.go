@@ -20,7 +20,7 @@ type Server struct {
 type ServerOption func(s *Server) error
 
 // NewServer returns a new server.
-func NewServer(redisURL string, options ...ServerOption) (*Server, error) {
+func NewServer(redisURL string, db int, options ...ServerOption) (*Server, error) {
 	s := &Server{
 		config: DefaultConfig(),
 	}
@@ -32,7 +32,7 @@ func NewServer(redisURL string, options ...ServerOption) (*Server, error) {
 	}
 
 	s.asynqServer = asynq.NewServer(
-		asynq.RedisClientOpt{Addr: redisURL},
+		asynq.RedisClientOpt{Addr: redisURL, DB: db},
 		s.config.toAsynqConfig(),
 	)
 
