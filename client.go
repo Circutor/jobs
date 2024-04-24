@@ -19,9 +19,9 @@ type Client struct {
 type ClientOption func(s *Server) error
 
 // New returns a new client.
-func New(redisURL string, options ...ClientOption) *Client {
+func NewClient(redisURL string, db int, options ...ClientOption) *Client {
 	return &Client{
-		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: "localhost:6379"}),
+		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
 	}
 }
 
