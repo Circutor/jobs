@@ -11,11 +11,17 @@ import (
 // Handler is the definition of a Handler func for job execution
 type Handler func(context.Context, *Task) error
 
+// Middleware is a function which receives a Handler and returns another Handler.
+// Typically, the returned handler is a closure which does something with the context and task passed
+// to it, and then calls the handler passed as parameter to the MiddlewareFunc.
+type Middleware func(Handler) Handler
+
 // ServerMux is a wrapper around asynq.ServeMux, that keeps track of all the
 // kinds of jobs with their handlers.
 type ServerMux struct {
-	handlers map[string]Handler
-	gormDB   *gorm.DB
+	handlers    map[string]Handler
+	gormDB      *gorm.DB
+	middlewares []Middleware
 }
 
 // NewServerMux returns a new server mux.
@@ -30,12 +36,35 @@ func (m *ServerMux) HandleFunc(kind string, handler Handler) {
 	m.handlers[kind] = handler
 }
 
+// Use appends a Middleware to the chain.
+// Middlewares are executed in the order that they are applied to the ServeMux.
+func (m *ServerMux) Use(mws ...Middleware) {
+	m.middlewares = append(m.middlewares, mws...)
+}
+
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
 		return originalHandler(ctx, &Task{
 			ID:      t.ResultWriter().TaskID(),
 			Kind:    t.Type(),
 			Payload: t.Payload(),
+		})
+	}
+}
+
+func wrapMiddleware(originalMiddleware Middleware) asynq.MiddlewareFunc {
+	return func(h asynq.Handler) asynq.Handler {
+		return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+			adaptedHandler := func(ctx context.Context, task *Task) error {
+				return h.ProcessTask(ctx, t)
+			}
+			wrappedHandler := originalMiddleware(adaptedHandler)
+
+			return wrappedHandler(ctx, &Task{
+				ID:      t.ResultWriter().TaskID(),
+				Kind:    t.Type(),
+				Payload: t.Payload(),
+			})
 		})
 	}
 }
@@ -47,6 +76,10 @@ func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
 
 	asynqMux := asynq.NewServeMux()
 	asynqMux.Use(m.dbMiddleware)
+
+	for _, mw := range m.middlewares {
+		asynqMux.Use(wrapMiddleware(mw))
+	}
 
 	for kind, handler := range m.handlers {
 		asynqMux.HandleFunc(kind, wrapHandler(handler))
