@@ -1,15 +1,12 @@
 # Jobs Package
-
 This package provides an asynchronous job processing system built on top of the `github.com/hbhiken/async` library.
 
 ## Overview
-
 - The package introduces a `ServerMux` type, which serves as a wrapper around `async.ServeMux`. It's responsible for handling various job kinds and their respective handlers.
 - A `Client` type acts as a wrapper around the `async.Client` to enqueue tasks.
 - Configuration options are available for the server, including setting up the maximum number of concurrent workers and priority of task queues.
 
 ## Key Components
-
 1. **Task**:
     - Represents a task with a kind, payload, max retry attempts, and timeout.
     - Task options like `MaxRetry` and `Timeout` are available for customization.
@@ -28,11 +25,9 @@ This package provides an asynchronous job processing system built on top of the 
     - Provides a default configuration using `DefaultConfig`.
 
 ## Basic Usage
-
 For this basic usage, let's use the example of integrating jobs out of [the existing `RegisterUserUseCase`](https://gitlab.com/circutor/cloud/myc-cloud/-/blob/main/business/usecase/user/register.go#L12).
 
 ### Enqueing jobs - Example from the User Core (exceptionally from the UseCase)
-
 Preferably we would enqueue jobs from the Core as for the existing rules:
 
 - We do things in the specific Core to orchestrate within a domain.
@@ -41,7 +36,6 @@ Preferably we would enqueue jobs from the Core as for the existing rules:
 Jobs in the 99% of the cases will be a domain logic, exceptionally we could have a job, that has to orchestrate two different domains. Likely on those situations we can enqueue two parallel jobs, chaining jobs will cause coupling between domains.
 
 #### Enqueing jobs - Initializing the UserCore with a job's client
-
 This would be the updated Core definition from [the User Core source code](https://gitlab.com/circutor/cloud/myc-cloud/-/blob/main/business/core/user/user.go#L28):
 
 ```go
@@ -70,26 +64,25 @@ func NewUserCore(userStore UserStore, jobEnqueuer JobEnqueuer) UserCore {
 This is the application loader initializing the jobClient and using it on the User Core initialization.
 
 ```go
-// app/services/myc-api/main.go
-// ...
-
-userStore := userDB.NewUserStore(DB)
 jobsClient := jobs.NewClient(cfg.RedisURL)
 defer jobsClient.Close()
 
-userCore := userCore.NewUserCore(userStore, jobsClient)
+userCore := userCore.NewUserCore(userDB.NewUserStore(DB),jobsClient)
 ```
 
 #### Enqueing jobs - Using the client to enqueue a job
-
 ```go
 // business/core/user/user.go
 // ...
  
-func (core UserCore) Create(ctx context.Context, user entities.User, creationType string) (entities.User, error) {
-    // ...
-    // TODO: The job type and the payload should be defined in a common place with real constant and types.
-    createUserPayload, err := json.Marshal(user)
+func (core UserCore) Create(ctx context.Context,
+    user entities.User, creationType string) (entities.User, error) {
+    createUserPayload, err := json.Marshal(
+        userJobs.CreateUserPayload{
+            Name: user.Name,
+            Email: user.Email,
+            CreationType: creationType,
+        })
     if err != nil {
         return fmt.Errorf("json.Marshal, err: %w", err)
     }
@@ -103,15 +96,27 @@ func (core UserCore) Create(ctx context.Context, user entities.User, creationTyp
 ```
 
 ### Running jobs - Executing jobs
-
 The following is the job definition, very much likely every handler, we need to define the dependencies for every job.
 
 ```go
-// TODO - This path doesn't exists yet, it's an job's infra equivalent to handlers.
-// app/services/myc-api/jobs/v1/user/create.go
+// app/services/worker/jobs/v1/user/create.go
 
 // CreateUserTaskType is the Job Type for triggering the CreateUser Job.
 const CreateUserTaskType = "createUser"
+
+// CreateUserPayload is the payload for the CreateUser Job.
+type CreateUserPayload struct {
+    Name string `json:"name"`
+    Email string `json:"email"`
+    CreationType string `json:"creationType"`
+}
+
+func (cup CreateUserPayload) ToEntity() entities.User {
+    return entities.User{
+        Name: cup.Name,
+        Email: cup.Email,
+    }
+}
 
 // CreateUser define the dependencies to create user asynchronously by jobs.
 type CreateUser struct {
@@ -127,10 +132,12 @@ func NewCreateUser(registerUseCase registerUseCase) CreateUser {
 
 // ProcessTask is the create user asychornous execution method.
 func (cu *CreateUser) ProcessTask (ctx context.Context, task *jobs.Task) error {
-    var user entities.User
-    if err := json.Unmarshal(task.Payload(), &user); err != nil {
+    var createUserPayload CreateUserPayload
+    if err := json.Unmarshal(task.Payload(), &createUserPayload); err != nil {
         return fmt.Errorf("json.Unmarshal, %w", err)
     }
+
+    user := createUserPayload.ToEntity()
     
     if _, err := cu.registerUseCase.Execute(ctx, user); err != nil {
         return fmt.Errorf("cu.registerUseCase.Execute, %w, err")
@@ -143,8 +150,6 @@ func (cu *CreateUser) ProcessTask (ctx context.Context, task *jobs.Task) error {
 The following snippet is the job server initialization.
 
 ```go
-// TODO - This would likely be a new main.
-}
 server := jobs.NewServer(cfg.RedisURL, 
     jobs.WithConfig(
         jobs.Config{
