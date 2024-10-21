@@ -13,8 +13,9 @@ type Task struct {
 	Kind    string
 	Payload []byte
 
-	maxRetry int
-	timeout  time.Duration
+	maxRetry  int
+	timeout   time.Duration
+	retention time.Duration
 }
 
 func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
@@ -59,11 +60,19 @@ func Timeout(d time.Duration) TaskOption {
 	}
 }
 
+// Retention is a TaskOption that allows to set the retention.
+func Retention(d time.Duration) TaskOption {
+	return func(t *Task) {
+		t.retention = d
+	}
+}
+
 func (t Task) toAsynqTask() *asynq.Task {
 	return asynq.NewTask(
 		t.Kind, t.Payload,
 		asynq.MaxRetry(t.maxRetry),
 		asynq.Timeout(t.timeout),
+		asynq.Retention(t.retention),
 		asynq.TaskID(t.ID),
 	)
 }
