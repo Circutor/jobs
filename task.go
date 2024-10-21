@@ -12,6 +12,7 @@ type Task struct {
 	ID      string
 	Kind    string
 	Payload []byte
+	Result  []byte
 
 	maxRetry  int
 	timeout   time.Duration
