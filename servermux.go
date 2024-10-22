@@ -132,6 +132,7 @@ func (m *ServerMux) saveResultsMiddleware(h asynq.Handler) asynq.Handler {
 			return fmt.Errorf("ServerMux.handler(%v) - err: %w", t, err)
 		}
 
+		// WARNING: Is the referenced context the same executed by the handler?
 		result, _ := ctx.Value("result").([]byte)
 
 		_, err = t.ResultWriter().Write(result)
