@@ -123,3 +123,21 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 		return nil
 	})
 }
+
+func (m *ServerMux) saveResultsMiddleware(h Handler) Handler {
+	return func(ctx context.Context, t *Task) error {
+		err := h(ctx, t)
+		if err != nil {
+			return fmt.Errorf("ServerMux.handler(%v) - err: %w", t, err)
+		}
+
+		result := t.Result
+		fmt.Println(result)
+		_, err = t.toAsynqTask().ResultWriter().Write(result)
+		if err != nil {
+			return fmt.Errorf("ServerMux.saveResultsMiddleware.Write(%v) - err: %w", result, err)
+		}
+
+		return nil
+	}
+}
