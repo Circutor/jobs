@@ -68,8 +68,6 @@ func WithConfig(config Config) ServerOption {
 
 // Run starts the server.
 func (s *Server) Run(mux *ServerMux) error {
-	mux.Use(mux.saveResultsMiddleware)
-
 	if err := s.asynqServer.Run(mux.asynqServerMux(s.gormDB)); err != nil {
 		return fmt.Errorf(":s.asynqServer.Run %w", err)
 	}
