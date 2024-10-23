@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -72,12 +73,17 @@ func Retention(d time.Duration) TaskOption {
 	}
 }
 
-func (t Task) WriteResult(result []byte) (n int, err error) {
+func (t Task) WriteResult(result any) (n int, err error) {
+	byteResult, err := json.Marshal(err)
+	if err != nil {
+		return 0, err
+	}
+
 	if t.originalTask == nil {
 		return 0, asynq.ErrTaskNotFound
 	}
 
-	return t.originalTask.ResultWriter().Write(result)
+	return t.originalTask.ResultWriter().Write(byteResult)
 }
 
 func (t *Task) toAsynqTask() *asynq.Task {
