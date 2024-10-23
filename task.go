@@ -80,7 +80,7 @@ func (t Task) WriteResult(result []byte) (n int, err error) {
 	return t.originalTask.ResultWriter().Write(result)
 }
 
-func (t Task) toAsynqTask() *asynq.Task {
+func (t *Task) toAsynqTask() *asynq.Task {
 	if t.originalTask == nil {
 		t.originalTask = asynq.NewTask(
 			t.Kind, t.Payload,
