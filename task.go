@@ -39,6 +39,9 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 		ID:      uuid.NewString(),
 		Kind:    kind,
 		Payload: payload,
+
+		// Add default retention time of 15 days.
+		retention: time.Hour * 24 * 15,
 	}
 
 	for _, option := range options {
