@@ -74,7 +74,7 @@ func Retention(d time.Duration) TaskOption {
 }
 
 func (t Task) WriteResult(result any) (n int, err error) {
-	byteResult, err := json.Marshal(err)
+	byteResult, err := json.Marshal(result)
 	if err != nil {
 		return 0, err
 	}
