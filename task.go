@@ -16,6 +16,8 @@ type Task struct {
 	maxRetry  int
 	timeout   time.Duration
 	retention time.Duration
+
+	originalTask *asynq.Task
 }
 
 func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
@@ -67,14 +69,26 @@ func Retention(d time.Duration) TaskOption {
 	}
 }
 
+func (t Task) WriteResult(result []byte) (n int, err error) {
+	if t.originalTask == nil {
+		return 0, asynq.ErrTaskNotFound
+	}
+
+	return t.originalTask.ResultWriter().Write(result)
+}
+
 func (t Task) toAsynqTask() *asynq.Task {
-	return asynq.NewTask(
-		t.Kind, t.Payload,
-		asynq.MaxRetry(t.maxRetry),
-		asynq.Timeout(t.timeout),
-		asynq.Retention(t.retention),
-		asynq.TaskID(t.ID),
-	)
+	if t.originalTask == nil {
+		t.originalTask = asynq.NewTask(
+			t.Kind, t.Payload,
+			asynq.MaxRetry(t.maxRetry),
+			asynq.Timeout(t.timeout),
+			asynq.Retention(t.retention),
+			asynq.TaskID(t.ID),
+		)
+	}
+
+	return t.originalTask
 }
 
 func fromAsynqTask(task *asynq.Task) Task {

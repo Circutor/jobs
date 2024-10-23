@@ -76,7 +76,6 @@ func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
 
 	asynqMux := asynq.NewServeMux()
 	asynqMux.Use(m.dbMiddleware)
-	asynqMux.Use(m.saveResultsMiddleware)
 
 	for _, mw := range m.middlewares {
 		asynqMux.Use(wrapMiddleware(mw))
@@ -119,25 +118,6 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 
 		if err = h.ProcessTask(ctx, t); err != nil {
 			return fmt.Errorf("h.ProcessTask %w", err)
-		}
-
-		return nil
-	})
-}
-
-func (m *ServerMux) saveResultsMiddleware(h asynq.Handler) asynq.Handler {
-	return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		err := h.ProcessTask(ctx, t)
-		if err != nil {
-			return fmt.Errorf("ServerMux.handler(%v) - err: %w", t, err)
-		}
-
-		// WARNING: Is the referenced context the same executed by the handler?
-		result, _ := ctx.Value("result").([]byte)
-
-		_, err = t.ResultWriter().Write(result)
-		if err != nil {
-			return fmt.Errorf("ServerMux.saveResultsMiddleware.Write(%v) - err: %w", result, err)
 		}
 
 		return nil
