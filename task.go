@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +14,11 @@ type Task struct {
 	Kind    string
 	Payload []byte
 
-	maxRetry int
-	timeout  time.Duration
+	maxRetry  int
+	timeout   time.Duration
+	retention time.Duration
+
+	originalTask *asynq.Task
 }
 
 func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
@@ -36,6 +40,9 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 		ID:      uuid.NewString(),
 		Kind:    kind,
 		Payload: payload,
+
+		// Add default retention time of 15 days.
+		retention: time.Hour * 24 * 15,
 	}
 
 	for _, option := range options {
@@ -59,13 +66,38 @@ func Timeout(d time.Duration) TaskOption {
 	}
 }
 
-func (t Task) toAsynqTask() *asynq.Task {
-	return asynq.NewTask(
-		t.Kind, t.Payload,
-		asynq.MaxRetry(t.maxRetry),
-		asynq.Timeout(t.timeout),
-		asynq.TaskID(t.ID),
-	)
+// Retention is a TaskOption that allows to set the retention.
+func Retention(d time.Duration) TaskOption {
+	return func(t *Task) {
+		t.retention = d
+	}
+}
+
+func (t Task) WriteResult(result any) (n int, err error) {
+	byteResult, err := json.Marshal(result)
+	if err != nil {
+		return 0, err
+	}
+
+	if t.originalTask == nil {
+		return 0, asynq.ErrTaskNotFound
+	}
+
+	return t.originalTask.ResultWriter().Write(byteResult)
+}
+
+func (t *Task) toAsynqTask() *asynq.Task {
+	if t.originalTask == nil {
+		t.originalTask = asynq.NewTask(
+			t.Kind, t.Payload,
+			asynq.MaxRetry(t.maxRetry),
+			asynq.Timeout(t.timeout),
+			asynq.Retention(t.retention),
+			asynq.TaskID(t.ID),
+		)
+	}
+
+	return t.originalTask
 }
 
 func fromAsynqTask(task *asynq.Task) Task {

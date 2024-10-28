@@ -50,7 +50,7 @@ func (c *Client) Close() {
 }
 
 // Enqueue enqueues a task.
-func (c *Client) Enqueue(t Task) error {
+func (c *Client) Enqueue(t *Task) error {
 	if _, err := c.asynqClient.Enqueue(t.toAsynqTask()); err != nil {
 		return fmt.Errorf(":c.asynqClient.Enqueue %w", err)
 	}

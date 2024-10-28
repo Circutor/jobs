@@ -45,9 +45,10 @@ func (m *ServerMux) Use(mws ...Middleware) {
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
 		return originalHandler(ctx, &Task{
-			ID:      t.ResultWriter().TaskID(),
-			Kind:    t.Type(),
-			Payload: t.Payload(),
+			ID:           t.ResultWriter().TaskID(),
+			Kind:         t.Type(),
+			Payload:      t.Payload(),
+			originalTask: t,
 		})
 	}
 }
@@ -61,9 +62,10 @@ func wrapMiddleware(originalMiddleware Middleware) asynq.MiddlewareFunc {
 			wrappedHandler := originalMiddleware(adaptedHandler)
 
 			return wrappedHandler(ctx, &Task{
-				ID:      t.ResultWriter().TaskID(),
-				Kind:    t.Type(),
-				Payload: t.Payload(),
+				ID:           t.ResultWriter().TaskID(),
+				Kind:         t.Type(),
+				Payload:      t.Payload(),
+				originalTask: t,
 			})
 		})
 	}
