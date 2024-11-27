@@ -51,7 +51,7 @@ func (c *Client) Close() {
 }
 
 // Get task result.
-func (c *Client) Result(taskID string) ([]byte, error) {
+func (c *Client) RetrieveTaskResultByID(taskID string) ([]byte, error) {
 	taskInfo, err := c.inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		return nil, fmt.Errorf("c.inspector.GetTaskInfo %w", err)
@@ -61,20 +61,19 @@ func (c *Client) Result(taskID string) ([]byte, error) {
 }
 
 // Enqueue enqueues a task.
-func (c *Client) Enqueue(t *Task) ([]byte, error) {
-	originalTaskInfo, err := c.asynqClient.Enqueue(t.toAsynqTask())
+func (c *Client) Enqueue(t *Task) (*TaskInfo, error) {
+	_, err := c.asynqClient.Enqueue(t.toAsynqTask())
 	if err != nil {
-		return nil, fmt.Errorf(":c.asynqClient.Enqueue %w", err)
+		return &TaskInfo{}, fmt.Errorf(":c.asynqClient.Enqueue %w", err)
 	}
 
-	result := originalTaskInfo.Result
+	taskInfo := t.toTaskInfo(TaskInfoStatusPending)
 
 	if c.gormDB != nil {
-		taskInfo := t.toTaskInfo(TaskInfoStatusPending, result)
 		if err := c.gormDB.Create(taskInfo.toDBTaskInfo()).Error; err != nil {
-			return nil, fmt.Errorf("c.gormDB.Create %w", err)
+			return &TaskInfo{}, fmt.Errorf("c.gormDB.Create %w", err)
 		}
 	}
 
-	return result, nil
+	return taskInfo, nil
 }
