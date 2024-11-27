@@ -11,6 +11,7 @@ import (
 // Client is a wrapper around asynq.Client.
 type Client struct {
 	asynqClient *asynq.Client
+	inspector   *asynq.Inspector
 	gormDB      *gorm.DB
 }
 
@@ -21,7 +22,7 @@ type ClientOption func(s *Server) error
 // New returns a new client.
 func NewClient(redisURL string, db int, options ...ClientOption) *Client {
 	return &Client{
-		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
+		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}), inspector: asynq.NewInspector(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
 	}
 }
 
@@ -47,6 +48,16 @@ func WithClientDBMiddleware(postgresURL string) ClientOption {
 // Close closes the client.
 func (c *Client) Close() {
 	c.asynqClient.Close()
+}
+
+// Get task result.
+func (c *Client) Result(taskID string) ([]byte, error) {
+	taskInfo, err := c.inspector.GetTaskInfo("default", taskID)
+	if err != nil {
+		return nil, fmt.Errorf("c.inspector.GetTaskInfo %w", err)
+	}
+
+	return taskInfo.Result, nil
 }
 
 // Enqueue enqueues a task.
