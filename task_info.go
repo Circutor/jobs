@@ -26,6 +26,7 @@ type TaskInfo struct {
 	TaskType string
 	Payload  string
 	Status   TaskInfoStatus
+	Result   []byte
 }
 
 func (t *TaskInfo) toDBTaskInfo() *dbTaskInfo {
@@ -34,6 +35,7 @@ func (t *TaskInfo) toDBTaskInfo() *dbTaskInfo {
 		TaskType: t.TaskType,
 		Payload:  t.Payload,
 		Status:   string(t.Status),
+		Result:   string(t.Result),
 	}
 }
 
@@ -42,6 +44,7 @@ type dbTaskInfo struct {
 	TaskType string `gorm:"size:255"`
 	Payload  string `gorm:"size:1000"`
 	Status   string `gorm:"size:100;default:'pending'"`
+	Result   string `gorm:"size:1000"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

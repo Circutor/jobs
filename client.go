@@ -50,17 +50,20 @@ func (c *Client) Close() {
 }
 
 // Enqueue enqueues a task.
-func (c *Client) Enqueue(t *Task) error {
-	if _, err := c.asynqClient.Enqueue(t.toAsynqTask()); err != nil {
-		return fmt.Errorf(":c.asynqClient.Enqueue %w", err)
+func (c *Client) Enqueue(t *Task) ([]byte, error) {
+	originalTaskInfo, err := c.asynqClient.Enqueue(t.toAsynqTask())
+	if err != nil {
+		return nil, fmt.Errorf(":c.asynqClient.Enqueue %w", err)
 	}
 
+	result := originalTaskInfo.Result
+
 	if c.gormDB != nil {
-		taskInfo := t.toTaskInfo(TaskInfoStatusPending)
+		taskInfo := t.toTaskInfo(TaskInfoStatusPending, result)
 		if err := c.gormDB.Create(taskInfo.toDBTaskInfo()).Error; err != nil {
-			return fmt.Errorf("c.gormDB.Create %w", err)
+			return nil, fmt.Errorf("c.gormDB.Create %w", err)
 		}
 	}
 
-	return nil
+	return result, nil
 }

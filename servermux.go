@@ -95,7 +95,7 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 		jobsTask := fromAsynqTask(t)
 
 		if m.gormDB != nil {
-			taskInfo := jobsTask.toTaskInfo(TaskInfoStatusRunning)
+			taskInfo := jobsTask.toTaskInfo(TaskInfoStatusRunning, nil)
 			//nolint staticcheck
 			if err := m.gormDB.Updates(taskInfo.toDBTaskInfo()).Error; err != nil {
 				// TODO: log error
@@ -110,7 +110,7 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 					status = TaskInfoStatusFailed
 				}
 
-				taskInfo := jobsTask.toTaskInfo(status)
+				taskInfo := jobsTask.toTaskInfo(status, nil)
 				//nolint staticcheck
 				if err := m.gormDB.Updates(taskInfo.toDBTaskInfo()).Error; err != nil {
 					// TODO: log error

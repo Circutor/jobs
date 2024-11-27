@@ -21,12 +21,18 @@ type Task struct {
 	originalTask *asynq.Task
 }
 
-func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
+func (t Task) toTaskInfo(status TaskInfoStatus, result []byte) *TaskInfo {
+	resultJSON := []byte{}
+	if result != nil {
+		resultJSON, _ = json.Marshal(result)
+	}
+
 	return &TaskInfo{
 		ID:       t.ID,
 		TaskType: t.Kind,
 		Payload:  string(t.Payload),
 		Status:   status,
+		Result:   resultJSON,
 	}
 }
 
