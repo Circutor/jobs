@@ -11,6 +11,7 @@ import (
 // Client is a wrapper around asynq.Client.
 type Client struct {
 	asynqClient *asynq.Client
+	inspector   *asynq.Inspector
 	gormDB      *gorm.DB
 }
 
@@ -21,7 +22,7 @@ type ClientOption func(s *Server) error
 // New returns a new client.
 func NewClient(redisURL string, db int, options ...ClientOption) *Client {
 	return &Client{
-		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
+		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}), inspector: asynq.NewInspector(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
 	}
 }
 
@@ -49,18 +50,30 @@ func (c *Client) Close() {
 	c.asynqClient.Close()
 }
 
-// Enqueue enqueues a task.
-func (c *Client) Enqueue(t *Task) error {
-	if _, err := c.asynqClient.Enqueue(t.toAsynqTask()); err != nil {
-		return fmt.Errorf(":c.asynqClient.Enqueue %w", err)
+// Get task result.
+func (c *Client) RetrieveTaskResultByID(taskID string) ([]byte, error) {
+	taskInfo, err := c.inspector.GetTaskInfo("default", taskID)
+	if err != nil {
+		return nil, fmt.Errorf("c.inspector.GetTaskInfo %w", err)
 	}
 
+	return taskInfo.Result, nil
+}
+
+// Enqueue enqueues a task.
+func (c *Client) Enqueue(t *Task) (*TaskInfo, error) {
+	_, err := c.asynqClient.Enqueue(t.toAsynqTask())
+	if err != nil {
+		return &TaskInfo{}, fmt.Errorf(":c.asynqClient.Enqueue %w", err)
+	}
+
+	taskInfo := t.toTaskInfo(TaskInfoStatusPending)
+
 	if c.gormDB != nil {
-		taskInfo := t.toTaskInfo(TaskInfoStatusPending)
 		if err := c.gormDB.Create(taskInfo.toDBTaskInfo()).Error; err != nil {
-			return fmt.Errorf("c.gormDB.Create %w", err)
+			return &TaskInfo{}, fmt.Errorf("c.gormDB.Create %w", err)
 		}
 	}
 
-	return nil
+	return taskInfo, nil
 }

@@ -13,6 +13,7 @@ type Task struct {
 	ID      string
 	Kind    string
 	Payload []byte
+	Result  []byte
 
 	maxRetry  int
 	timeout   time.Duration
@@ -21,12 +22,13 @@ type Task struct {
 	originalTask *asynq.Task
 }
 
-func (t Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
+func (t *Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
 	return &TaskInfo{
 		ID:       t.ID,
 		TaskType: t.Kind,
 		Payload:  string(t.Payload),
 		Status:   status,
+		Result:   t.Result,
 	}
 }
 
@@ -73,7 +75,7 @@ func Retention(d time.Duration) TaskOption {
 	}
 }
 
-func (t Task) WriteResult(result any) (n int, err error) {
+func (t *Task) WriteResult(result any) (n int, err error) {
 	byteResult, err := json.Marshal(result)
 	if err != nil {
 		return 0, err
@@ -82,6 +84,8 @@ func (t Task) WriteResult(result any) (n int, err error) {
 	if t.originalTask == nil {
 		return 0, asynq.ErrTaskNotFound
 	}
+
+	t.Result = byteResult
 
 	return t.originalTask.ResultWriter().Write(byteResult)
 }
