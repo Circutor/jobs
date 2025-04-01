@@ -74,3 +74,8 @@ func (s *Server) Run(mux *ServerMux) error {
 
 	return nil
 }
+
+// Shutdown stops the server.
+func (s *Server) Shutdown() {
+	s.asynqServer.Shutdown()
+}

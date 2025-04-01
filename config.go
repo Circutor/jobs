@@ -1,6 +1,10 @@
 package jobs
 
-import "github.com/hibiken/asynq"
+import (
+	"time"
+
+	"github.com/hibiken/asynq"
+)
 
 type Logger interface {
 	// Debug logs a message at Debug level.
@@ -49,8 +53,9 @@ func DefaultConfig() Config {
 
 func (c *Config) toAsynqConfig() asynq.Config {
 	return asynq.Config{
-		Concurrency: c.Concurrency,
-		Queues:      c.Queues,
-		Logger:      c.Logger,
+		Concurrency:     c.Concurrency,
+		Queues:          c.Queues,
+		Logger:          c.Logger,
+		ShutdownTimeout: 10 * time.Second,
 	}
 }
