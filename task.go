@@ -15,10 +15,10 @@ type Task struct {
 	Payload []byte
 	Result  []byte
 
-	maxRetry  int
-	timeout   time.Duration
-	retention time.Duration
-
+	maxRetry     int
+	timeout      time.Duration
+	retention    time.Duration
+	queueName    string
 	originalTask *asynq.Task
 }
 
@@ -75,6 +75,13 @@ func Retention(d time.Duration) TaskOption {
 	}
 }
 
+// QueueName is a TaskOption that allows to set the queue name.
+func QueueName(name string) TaskOption {
+	return func(t *Task) {
+		t.queueName = name
+	}
+}
+
 func (t *Task) WriteResult(result any) (n int, err error) {
 	byteResult, err := json.Marshal(result)
 	if err != nil {
@@ -92,13 +99,18 @@ func (t *Task) WriteResult(result any) (n int, err error) {
 
 func (t *Task) toAsynqTask() *asynq.Task {
 	if t.originalTask == nil {
-		t.originalTask = asynq.NewTask(
-			t.Kind, t.Payload,
+		opts := []asynq.Option{
 			asynq.MaxRetry(t.maxRetry),
 			asynq.Timeout(t.timeout),
 			asynq.Retention(t.retention),
 			asynq.TaskID(t.ID),
-		)
+		}
+
+		if t.queueName != "" {
+			opts = append(opts, asynq.Queue(t.queueName))
+		}
+
+		t.originalTask = asynq.NewTask(t.Kind, t.Payload, opts...)
 	}
 
 	return t.originalTask
