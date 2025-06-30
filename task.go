@@ -18,6 +18,7 @@ type Task struct {
 	maxRetry     int
 	timeout      time.Duration
 	retention    time.Duration
+	processIn    time.Duration
 	queueName    string
 	originalTask *asynq.Task
 }
@@ -58,6 +59,13 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 func MaxRetry(n int) TaskOption {
 	return func(t *Task) {
 		t.maxRetry = n
+	}
+}
+
+// ProcessIn is a TaskOption that allows to set the process in duration.
+func ProcessIn(d time.Duration) TaskOption {
+	return func(t *Task) {
+		t.processIn = d
 	}
 }
 
@@ -104,6 +112,7 @@ func (t *Task) toAsynqTask() *asynq.Task {
 			asynq.Timeout(t.timeout),
 			asynq.Retention(t.retention),
 			asynq.TaskID(t.ID),
+			asynq.ProcessIn(t.processIn),
 		}
 
 		if t.queueName != "" {
