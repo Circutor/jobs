@@ -22,9 +22,10 @@ type Middleware func(Handler) Handler
 // ServerMux is a wrapper around asynq.ServeMux, that keeps track of all the
 // kinds of jobs with their handlers.
 type ServerMux struct {
-	handlers    map[string]Handler
-	gormDB      *gorm.DB
-	middlewares []Middleware
+	handlers          map[string]Handler
+	gormDB            *gorm.DB
+	middlewares       []Middleware
+	globalRateLimiter *rate.Limiter
 }
 
 // NewServerMux returns a new server mux.
@@ -48,6 +49,43 @@ func (m *ServerMux) HandleFuncWithRateLimit(kind string, handler Handler, config
 // Middlewares are executed in the order that they are applied to the ServeMux.
 func (m *ServerMux) Use(mws ...Middleware) {
 	m.middlewares = append(m.middlewares, mws...)
+}
+
+func (m *ServerMux) SetGlobalRateLimit(config RateLimitConfig) {
+	m.globalRateLimiter = rate.NewLimiter(rate.Limit(config.Rate), config.Burst)
+
+	globalRateLimitMW := func(next Handler) Handler {
+		return func(ctx context.Context, t *Task) error {
+			if !m.globalRateLimiter.Allow() {
+				retryRange := config.MaxRetryDelay - config.MinRetryDelay
+				randomDelay := time.Duration(rand.Float64() * float64(retryRange))
+				retryIn := config.MinRetryDelay + randomDelay
+
+				return &RateLimitError{RetryIn: retryIn}
+			}
+			return next(ctx, t)
+		}
+	}
+
+	m.middlewares = append(m.middlewares, globalRateLimitMW)
+}
+
+func (m *ServerMux) createPerHandlerRateLimit(rateLimitConfig RateLimitConfig) Middleware {
+	limiter := rate.NewLimiter(rate.Limit(rateLimitConfig.Rate), rateLimitConfig.Burst)
+
+	return func(next Handler) Handler {
+		return func(ctx context.Context, t *Task) error {
+			if !limiter.Allow() {
+				retryRange := rateLimitConfig.MaxRetryDelay - rateLimitConfig.MinRetryDelay
+				randomDelay := time.Duration(rand.Float64() * float64(retryRange))
+				retryIn := rateLimitConfig.MinRetryDelay + randomDelay
+
+				return &RateLimitError{RetryIn: retryIn}
+			}
+
+			return next(ctx, t)
+		}
+	}
 }
 
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
@@ -135,19 +173,5 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 }
 
 func (m *ServerMux) RateLimitMiddleware(rateLimitConfig RateLimitConfig) Middleware {
-	limiter := rate.NewLimiter(rate.Limit(rateLimitConfig.Rate), rateLimitConfig.Burst)
-
-	return func(next Handler) Handler {
-		return func(ctx context.Context, t *Task) error {
-			if !limiter.Allow() {
-				retryRange := rateLimitConfig.MaxRetryDelay - rateLimitConfig.MinRetryDelay
-				randomDelay := time.Duration(rand.Float64() * float64(retryRange))
-				retryIn := rateLimitConfig.MinRetryDelay + randomDelay
-
-				return &RateLimitError{RetryIn: retryIn}
-			}
-
-			return next(ctx, t)
-		}
-	}
+	return m.createPerHandlerRateLimit(rateLimitConfig)
 }

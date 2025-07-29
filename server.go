@@ -87,6 +87,9 @@ func WithConfig(config Config) ServerOption {
 // Run starts the server.
 func (s *Server) Run(mux *ServerMux) error {
 	// Set default rate limit middleware.
+	if s.config.RateLimitConfig.Rate > 0 {
+		mux.SetGlobalRateLimit(s.config.RateLimitConfig)
+	}
 
 	if err := s.asynqServer.Run(mux.asynqServerMux(s.gormDB)); err != nil {
 		return fmt.Errorf(":s.asynqServer.Run %w", err)
