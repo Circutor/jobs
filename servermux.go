@@ -3,8 +3,11 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/hibiken/asynq"
+	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 )
 
@@ -34,6 +37,11 @@ func NewServerMux() *ServerMux {
 // HandleFunc registers a handler for a given kind of job.
 func (m *ServerMux) HandleFunc(kind string, handler Handler) {
 	m.handlers[kind] = handler
+}
+
+func (m *ServerMux) HandleFuncWithRateLimit(kind string, handler Handler, config RateLimitConfig) {
+	rateLimitedHandler := m.RateLimitMiddleware(config)(handler)
+	m.HandleFunc(kind, rateLimitedHandler)
 }
 
 // Use appends a Middleware to the chain.
@@ -124,4 +132,22 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 
 		return nil
 	})
+}
+
+func (m *ServerMux) RateLimitMiddleware(rateLimitConfig RateLimitConfig) Middleware {
+	limiter := rate.NewLimiter(rate.Limit(rateLimitConfig.Rate), rateLimitConfig.Burst)
+
+	return func(next Handler) Handler {
+		return func(ctx context.Context, t *Task) error {
+			if !limiter.Allow() {
+				retryRange := rateLimitConfig.MaxRetryDelay - rateLimitConfig.MinRetryDelay
+				randomDelay := time.Duration(rand.Float64() * float64(retryRange))
+				retryIn := rateLimitConfig.MinRetryDelay + randomDelay
+
+				return &RateLimitError{RetryIn: retryIn}
+			}
+
+			return next(ctx, t)
+		}
+	}
 }

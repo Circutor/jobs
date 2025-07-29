@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"gorm.io/driver/postgres"
@@ -31,9 +32,26 @@ func NewServer(redisURL string, db int, options ...ServerOption) (*Server, error
 		}
 	}
 
+	asynqConfig := s.config.toAsynqConfig()
+
+	asynqConfig.IsFailure = func(err error) bool {
+		return !IsRateLimitError(err)
+	}
+
+	asynqConfig.RetryDelayFunc = func(n int, err error, task *asynq.Task) time.Duration {
+		wrappedTask := &Task{
+			ID:           task.ResultWriter().TaskID(),
+			Kind:         task.Type(),
+			Payload:      task.Payload(),
+			originalTask: task,
+		}
+
+		return RetryDelayFunc(n, err, wrappedTask)
+	}
+
 	s.asynqServer = asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisURL, DB: db},
-		s.config.toAsynqConfig(),
+		asynqConfig,
 	)
 
 	return s, nil
@@ -68,6 +86,8 @@ func WithConfig(config Config) ServerOption {
 
 // Run starts the server.
 func (s *Server) Run(mux *ServerMux) error {
+	// Set default rate limit middleware.
+
 	if err := s.asynqServer.Run(mux.asynqServerMux(s.gormDB)); err != nil {
 		return fmt.Errorf(":s.asynqServer.Run %w", err)
 	}

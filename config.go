@@ -24,6 +24,26 @@ type Logger interface {
 	Fatal(args ...interface{})
 }
 
+type RateLimitConfig struct {
+	// Rate per second (events/sec)
+	Rate float64
+	// Burst capacity
+	Burst int
+	// Min retry delay when rate limited
+	MinRetryDelay time.Duration
+	// Max retry delay when rate limited
+	MaxRetryDelay time.Duration
+}
+
+func DefaultRateLimitConfig() RateLimitConfig {
+	return RateLimitConfig{
+		Rate:          10,
+		Burst:         30,
+		MinRetryDelay: 1 * time.Second,
+		MaxRetryDelay: 10 * time.Second,
+	}
+}
+
 type Config struct {
 	// Concurrency specifies the maximum number of concurrent
 	// workers that can process a task queue.
@@ -37,6 +57,16 @@ type Config struct {
 	//
 	// If unset, default logger is used.
 	Logger Logger
+
+	// Predicate function to determine whether the error returned from Handler is a failure.
+	// If the function returns false, Server will not increment the retried counter for the task,
+	// and Server won't record the queue stats (processed and failed stats) to avoid skewing the error
+	// rate of the queue.
+	//
+	// By default, if the given error is non-nil the function returns true.
+	IsFailure func(error) bool
+
+	RateLimitConfig RateLimitConfig
 }
 
 // DefaultConfig returns the default configuration.
@@ -48,14 +78,21 @@ func DefaultConfig() Config {
 			"default":  10,
 			"low":      1,
 		},
+		RateLimitConfig: DefaultRateLimitConfig(),
 	}
 }
 
 func (c *Config) toAsynqConfig() asynq.Config {
-	return asynq.Config{
+	config := asynq.Config{
 		Concurrency:     c.Concurrency,
 		Queues:          c.Queues,
 		Logger:          c.Logger,
 		ShutdownTimeout: 10 * time.Second,
 	}
+
+	if c.IsFailure != nil {
+		config.IsFailure = c.IsFailure
+	}
+
+	return config
 }
