@@ -39,6 +39,16 @@ func NewServer(redisURL string, db int, options ...ServerOption) (*Server, error
 	}
 
 	asynqConfig.RetryDelayFunc = func(n int, err error, task *asynq.Task) time.Duration {
+		if task == nil {
+			return RetryDelayFunc(n, err, nil)
+		}
+
+		if task.ResultWriter() == nil {
+			// If the task does not have a ResultWriter, we cannot wrap it.
+			// This can happen if the task is not a retryable task.
+			return RetryDelayFunc(n, err, nil)
+		}
+
 		wrappedTask := &Task{
 			ID:           task.ResultWriter().TaskID(),
 			Kind:         task.Type(),
