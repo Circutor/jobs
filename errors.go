@@ -22,15 +22,7 @@ func IsRateLimitError(err error) bool {
 func RetryDelayFunc(n int, err error, task *Task) time.Duration {
 	var rateLimitErr *RateLimitError
 	if errors.As(err, &rateLimitErr) {
-		if n > rateLimitErr.MaxRetries {
-			return time.Duration(-1)
-		}
-
 		return rateLimitErr.RetryIn
-	}
-
-	if n > 3 {
-		return time.Duration(-1)
 	}
 
 	return time.Duration(n) * time.Second
