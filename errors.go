@@ -16,7 +16,9 @@ func (e *RateLimitError) Error() string {
 func IsRateLimitError(err error) bool {
 	var rateLimitErr *RateLimitError
 
-	return errors.As(err, &rateLimitErr)
+	isError := errors.As(err, &rateLimitErr)
+
+	return isError
 }
 
 func RetryDelayFunc(n int, err error, task *Task) time.Duration {
