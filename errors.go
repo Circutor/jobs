@@ -6,8 +6,7 @@ import (
 )
 
 type RateLimitError struct {
-	RetryIn    time.Duration
-	MaxRetries int
+	RetryIn time.Duration
 }
 
 func (e *RateLimitError) Error() string {

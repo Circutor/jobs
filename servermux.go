@@ -62,8 +62,7 @@ func (m *ServerMux) SetGlobalRateLimit(config RateLimitConfig) {
 				retryIn := config.MinRetryDelay + randomDelay
 
 				return &RateLimitError{
-					RetryIn:    retryIn,
-					MaxRetries: config.MaxRetries,
+					RetryIn: retryIn,
 				}
 			}
 
@@ -85,8 +84,7 @@ func (m *ServerMux) createPerHandlerRateLimit(rateLimitConfig RateLimitConfig) M
 				retryIn := rateLimitConfig.MinRetryDelay + randomDelay
 
 				return &RateLimitError{
-					RetryIn:    retryIn,
-					MaxRetries: rateLimitConfig.MaxRetries,
+					RetryIn: retryIn,
 				}
 			}
 

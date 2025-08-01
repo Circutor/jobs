@@ -33,17 +33,14 @@ type RateLimitConfig struct {
 	MinRetryDelay time.Duration
 	// Max retry delay when rate limited
 	MaxRetryDelay time.Duration
-	// MaxRetries is the maximum number of retries allowed for a task
-	MaxRetries int
 }
 
 func DefaultRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
-		Rate:          10,
-		Burst:         30,
+		Rate:          2,
+		Burst:         8,
 		MinRetryDelay: 1 * time.Second,
 		MaxRetryDelay: 10 * time.Second,
-		MaxRetries:    100,
 	}
 }
 
