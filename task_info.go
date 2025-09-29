@@ -51,3 +51,7 @@ type dbTaskInfo struct {
 
 	gorm.Model
 }
+
+func (d *dbTaskInfo) TableName() string {
+	return "background_jobs"
+}
