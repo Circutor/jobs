@@ -21,6 +21,7 @@ type Task struct {
 	processIn    time.Duration
 	queueName    string
 	originalTask *asynq.Task
+	sequential   bool
 }
 
 func (t *Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
@@ -54,6 +55,12 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 	}
 
 	return t
+}
+
+func Sequential(isSequential bool) TaskOption {
+	return func(t *Task) {
+		t.sequential = isSequential
+	}
 }
 
 // MaxRetry is a TaskOption that allows to set the maximum number of retries.

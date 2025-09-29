@@ -41,9 +41,9 @@ func (t *TaskInfo) toDBTaskInfo() *dbTaskInfo {
 
 type dbTaskInfo struct {
 	ID       string `gorm:"primaryKey"`
-	TaskType string `gorm:"size:255"`
+	TaskType string `gorm:"size:255;index"`
 	Payload  string `gorm:"size:1000"`
-	Status   string `gorm:"size:100;default:'pending'"`
+	Status   string `gorm:"size:100;default:'pending';index"`
 	Result   string `gorm:"size:1000"`
 
 	CreatedAt time.Time

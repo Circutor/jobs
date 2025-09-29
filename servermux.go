@@ -180,3 +180,43 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 func (m *ServerMux) RateLimitMiddleware(rateLimitConfig RateLimitConfig) Middleware {
 	return m.createPerHandlerRateLimit(rateLimitConfig)
 }
+
+func (m *ServerMux) sequentialTaskMiddleware(h asynq.Handler) asynq.Handler {
+	return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+		jobsTask := fromAsynqTask(t)
+
+		if jobsTask.sequential {
+			if m.gormDB != nil {
+				running, err := m.isAnotherTaskOfSameKindRunning(jobsTask.Kind)
+				if err != nil {
+					return fmt.Errorf("m.isAnotherTaskOfSameKindRunning %w", err)
+				}
+
+				if running {
+					return &RateLimitError{
+						RetryIn: time.Second * 10,
+					}
+				}
+			}
+		}
+
+		return h.ProcessTask(ctx, t)
+	})
+}
+
+func (m *ServerMux) isAnotherTaskOfSameKindRunning(kind string) (bool, error) {
+	if m.gormDB == nil {
+		return false, nil
+	}
+
+	var count int64
+	err := m.gormDB.Model(&dbTaskInfo{}).
+		Where("kind = ? AND status = ?", kind, TaskInfoStatusRunning).
+		Count(&count).Error
+
+	if err != nil {
+		return false, fmt.Errorf("m.gormDB.Model.Count %w", err)
+	}
+
+	return count > 0, nil
+}
