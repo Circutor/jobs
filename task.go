@@ -41,10 +41,11 @@ type TaskOption func(t *Task)
 // NewTask creates a new task.
 func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 	t := Task{
-		ID:       uuid.NewString(),
-		Kind:     kind,
-		Payload:  payload,
-		maxRetry: 150,
+		ID:         uuid.NewString(),
+		Kind:       kind,
+		Payload:    payload,
+		maxRetry:   150,
+		sequential: false,
 
 		// Add default retention time of 1 day.
 		retention: time.Hour * 24 * 1,
