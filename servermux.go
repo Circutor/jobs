@@ -212,7 +212,7 @@ func (m *ServerMux) isAnotherTaskOfSameKindRunning(kind string) (bool, error) {
 
 	var count int64
 	err := m.gormDB.Model(&dbTaskInfo{}).
-		Where("kind = ? AND status = ?", kind, TaskInfoStatusRunning).
+		Where("task_type = ? AND status = ?", kind, TaskInfoStatusRunning).
 		Count(&count).Error
 
 	if err != nil {
