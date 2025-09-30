@@ -8,6 +8,31 @@ import (
 	"github.com/hibiken/asynq"
 )
 
+type taskPayload struct {
+	IsSequential bool            `json:"is_sequential"`
+	OriginalData json.RawMessage `json:"original_data"`
+}
+
+func wrapPayload(isSequential bool, originalData []byte) []byte {
+	wrapped := taskPayload{
+		IsSequential: isSequential,
+		OriginalData: originalData,
+	}
+
+	data, _ := json.Marshal(wrapped)
+
+	return data
+}
+
+func unwrapPayload(payload []byte) (bool, []byte) {
+	var wrapped taskPayload
+	if err := json.Unmarshal(payload, &wrapped); err != nil {
+		return false, payload
+	}
+
+	return wrapped.IsSequential, wrapped.OriginalData
+}
+
 // Task is the definition of a task and its options.
 type Task struct {
 	ID      string
@@ -21,6 +46,7 @@ type Task struct {
 	processIn    time.Duration
 	queueName    string
 	originalTask *asynq.Task
+	sequential   bool
 }
 
 func (t *Task) toTaskInfo(status TaskInfoStatus) *TaskInfo {
@@ -40,10 +66,11 @@ type TaskOption func(t *Task)
 // NewTask creates a new task.
 func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 	t := Task{
-		ID:       uuid.NewString(),
-		Kind:     kind,
-		Payload:  payload,
-		maxRetry: 150,
+		ID:         uuid.NewString(),
+		Kind:       kind,
+		Payload:    payload,
+		maxRetry:   150,
+		sequential: false,
 
 		// Add default retention time of 1 day.
 		retention: time.Hour * 24 * 1,
@@ -54,6 +81,12 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 	}
 
 	return t
+}
+
+func Sequential(isSequential bool) TaskOption {
+	return func(t *Task) {
+		t.sequential = isSequential
+	}
 }
 
 // MaxRetry is a TaskOption that allows to set the maximum number of retries.
@@ -120,16 +153,20 @@ func (t *Task) toAsynqTask() *asynq.Task {
 			opts = append(opts, asynq.Queue(t.queueName))
 		}
 
-		t.originalTask = asynq.NewTask(t.Kind, t.Payload, opts...)
+		wrappedPayload := wrapPayload(t.sequential, t.Payload)
+		t.originalTask = asynq.NewTask(t.Kind, wrappedPayload, opts...)
 	}
 
 	return t.originalTask
 }
 
 func fromAsynqTask(task *asynq.Task) Task {
+	sequential, originalPayload := unwrapPayload(task.Payload())
+
 	return Task{
-		ID:      task.ResultWriter().TaskID(),
-		Kind:    task.Type(),
-		Payload: task.Payload(),
+		ID:         task.ResultWriter().TaskID(),
+		Kind:       task.Type(),
+		Payload:    originalPayload,
+		sequential: sequential,
 	}
 }

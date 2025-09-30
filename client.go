@@ -17,19 +17,28 @@ type Client struct {
 
 // ClientOption is a function for optional params that allow custom
 // configurations for the server.
-type ClientOption func(s *Server) error
+type ClientOption func(s *Client) error
 
 // New returns a new client.
-func NewClient(redisURL string, db int, options ...ClientOption) *Client {
-	return &Client{
-		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}), inspector: asynq.NewInspector(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
+func NewClient(redisURL string, db int, options ...ClientOption) (*Client, error) {
+	c := &Client{
+		asynqClient: asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
+		inspector:   asynq.NewInspector(asynq.RedisClientOpt{Addr: redisURL, DB: db}),
 	}
+
+	for _, option := range options {
+		if err := option(c); err != nil {
+			return nil, fmt.Errorf("option %w", err)
+		}
+	}
+
+	return c, nil
 }
 
 // WithClientDBMiddleware is a ClientOption that allows to set a custom database
 // middleware, to store the tasks (an its statuses) in a database.
 func WithClientDBMiddleware(postgresURL string) ClientOption {
-	return func(s *Server) error {
+	return func(s *Client) error {
 		db, err := gorm.Open(postgres.Open(postgresURL), &gorm.Config{})
 		if err != nil {
 			return fmt.Errorf("failed to connect database: %v", err)

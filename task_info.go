@@ -41,13 +41,17 @@ func (t *TaskInfo) toDBTaskInfo() *dbTaskInfo {
 
 type dbTaskInfo struct {
 	ID       string `gorm:"primaryKey"`
-	TaskType string `gorm:"size:255"`
-	Payload  string `gorm:"size:1000"`
-	Status   string `gorm:"size:100;default:'pending'"`
-	Result   string `gorm:"size:1000"`
+	TaskType string `gorm:"size:255;index"`
+	Payload  string `gorm:"type:text"`
+	Status   string `gorm:"default:'pending';index"`
+	Result   string `gorm:"type:text"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	gorm.Model
+}
+
+func (d *dbTaskInfo) TableName() string {
+	return "background_jobs"
 }

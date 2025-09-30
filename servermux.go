@@ -95,10 +95,12 @@ func (m *ServerMux) createPerHandlerRateLimit(rateLimitConfig RateLimitConfig) M
 
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
+		_, origianlPayload := unwrapPayload(t.Payload())
+
 		return originalHandler(ctx, &Task{
 			ID:           t.ResultWriter().TaskID(),
 			Kind:         t.Type(),
-			Payload:      t.Payload(),
+			Payload:      origianlPayload,
 			originalTask: t,
 		})
 	}
@@ -123,11 +125,10 @@ func wrapMiddleware(originalMiddleware Middleware) asynq.MiddlewareFunc {
 }
 
 func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
-	// TODO: Likely the gormDB should be a field of ServerMux set during
-	// initialization.
 	m.gormDB = gormDB
 
 	asynqMux := asynq.NewServeMux()
+	asynqMux.Use(m.sequentialTaskMiddleware)
 	asynqMux.Use(m.dbMiddleware)
 
 	for _, mw := range m.middlewares {
@@ -179,4 +180,44 @@ func (m *ServerMux) dbMiddleware(h asynq.Handler) asynq.Handler {
 
 func (m *ServerMux) RateLimitMiddleware(rateLimitConfig RateLimitConfig) Middleware {
 	return m.createPerHandlerRateLimit(rateLimitConfig)
+}
+
+func (m *ServerMux) sequentialTaskMiddleware(h asynq.Handler) asynq.Handler {
+	return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+		sequential, _ := unwrapPayload(t.Payload())
+
+		if sequential {
+			if m.gormDB != nil {
+				running, err := m.isAnotherTaskOfSameKindRunning(t.Type())
+				if err != nil {
+					return fmt.Errorf("m.isAnotherTaskOfSameKindRunning %w", err)
+				}
+
+				if running {
+					return &RateLimitError{
+						RetryIn: time.Second * 10,
+					}
+				}
+			}
+		}
+
+		return h.ProcessTask(ctx, t)
+	})
+}
+
+func (m *ServerMux) isAnotherTaskOfSameKindRunning(kind string) (bool, error) {
+	if m.gormDB == nil {
+		return false, nil
+	}
+
+	var count int64
+	err := m.gormDB.Model(&dbTaskInfo{}).
+		Where("task_type = ? AND status = ?", kind, TaskInfoStatusRunning).
+		Count(&count).Error
+
+	if err != nil {
+		return false, fmt.Errorf("m.gormDB.Model.Count %w", err)
+	}
+
+	return count > 0, nil
 }
