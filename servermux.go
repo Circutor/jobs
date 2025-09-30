@@ -128,8 +128,8 @@ func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
 	m.gormDB = gormDB
 
 	asynqMux := asynq.NewServeMux()
-	asynqMux.Use(m.dbMiddleware)
 	asynqMux.Use(m.sequentialTaskMiddleware)
+	asynqMux.Use(m.dbMiddleware)
 
 	for _, mw := range m.middlewares {
 		asynqMux.Use(wrapMiddleware(mw))
