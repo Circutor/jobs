@@ -95,10 +95,12 @@ func (m *ServerMux) createPerHandlerRateLimit(rateLimitConfig RateLimitConfig) M
 
 func wrapHandler(originalHandler Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
+		_, origianlPayload := unwrapPayload(t.Payload())
+
 		return originalHandler(ctx, &Task{
 			ID:           t.ResultWriter().TaskID(),
 			Kind:         t.Type(),
-			Payload:      t.Payload(),
+			Payload:      origianlPayload,
 			originalTask: t,
 		})
 	}
@@ -123,8 +125,6 @@ func wrapMiddleware(originalMiddleware Middleware) asynq.MiddlewareFunc {
 }
 
 func (m *ServerMux) asynqServerMux(gormDB *gorm.DB) *asynq.ServeMux {
-	// TODO: Likely the gormDB should be a field of ServerMux set during
-	// initialization.
 	m.gormDB = gormDB
 
 	asynqMux := asynq.NewServeMux()
@@ -184,11 +184,11 @@ func (m *ServerMux) RateLimitMiddleware(rateLimitConfig RateLimitConfig) Middlew
 
 func (m *ServerMux) sequentialTaskMiddleware(h asynq.Handler) asynq.Handler {
 	return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		jobsTask := fromAsynqTask(t)
+		sequential, _ := unwrapPayload(t.Payload())
 
-		if jobsTask.sequential {
+		if sequential {
 			if m.gormDB != nil {
-				running, err := m.isAnotherTaskOfSameKindRunning(jobsTask.Kind)
+				running, err := m.isAnotherTaskOfSameKindRunning(t.Type())
 				if err != nil {
 					return fmt.Errorf("m.isAnotherTaskOfSameKindRunning %w", err)
 				}
