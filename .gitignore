@@ -1,0 +1,62 @@
+# Editor files
+.idea/
+*.iml
+*.swp
+*.log
+*.pdf
+
+# Mac
+.DS_Store
+
+# VS code
+.vscode
+
+vendor
+vendor/github.com/DrmagicE/gmqtt
+
+#Config local
+config.yaml
+deployment/k8s/enviroments/local-values.yaml
+
+# build artifacts
+dist/
+
+profile.cov
+
+#Frontend
+/app/services/myc-frontend-v1/node_modules
+/app/services/myc-frontend-v1/apps/cloud/proxy.config.json
+
+#End2End testing
+/deployment/end-to-end-api/node_modules
+
+#Docusaurus
+/docs/architecture/node_modules/
+/docs/architecture/build/
+/docs/architecture/.docusaurus/
+
+#Cypress
+cypress-output/
+
+#Compilation
+main
+myc-cli
+./email-viewer
+
+#Backups
+new_myc_variables_backup.csv
+myc_variables_backup.csv
+
+__pycache__/
+*.py[cod]
+
+data.sql
+metrics.csv
+
+# Arch
+## vim
+.vim-bookmarks
+## sqlls
+.sqlls/*
+
+

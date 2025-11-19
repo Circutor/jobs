@@ -69,7 +69,7 @@ func NewTask(kind string, payload []byte, options ...TaskOption) Task {
 		ID:         uuid.NewString(),
 		Kind:       kind,
 		Payload:    payload,
-		maxRetry:   150,
+		maxRetry:   5,
 		sequential: false,
 
 		// Add default retention time of 1 day.
