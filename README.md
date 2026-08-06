@@ -24,6 +24,32 @@ This package provides an asynchronous job processing system built on top of the 
     - Allows customizing server options, including concurrency and queue priorities.
     - Provides a default configuration using `DefaultConfig`.
 
+## Sequential jobs
+
+A task enqueued with `jobs.Sequential(true)` will not start while another task of the
+same kind is already running. This is only enforced when the server is built with
+`WithServerDBMiddleware`, since the check is done against the `background_jobs` table.
+
+When a sequential task finds another one running, it is rejected with a `RateLimitError`
+and retried 10 seconds later. Rate limit errors do not count towards the retry limit, so
+the task keeps waiting for its turn.
+
+### Best effort
+
+The check and the `running` mark are two separate queries, so exclusion is best effort:
+it holds in normal operation, but two tasks of the same kind can rarely overlap. There
+are two ways for that to happen.
+
+The first is two workers dequeuing the same kind within the same few milliseconds: both
+see nothing running and both proceed.
+
+The second is a handler that ignores context cancellation and outlives its deadline.
+
+Closing either would mean reserving the slot atomically, that is, holding a Postgres
+advisory lock on a dedicated connection for the entire life of the job. That keeps one
+database connection tied up per running sequential job, and this package deliberately
+does not pay that cost.
+
 ## Basic Usage
 For this basic usage, let's use the example of integrating jobs out of [the existing `RegisterUserUseCase`](https://gitlab.com/circutor/cloud/myc-cloud/-/blob/main/business/usecase/user/register.go#L12).
 

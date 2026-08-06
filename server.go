@@ -99,7 +99,11 @@ func (s *Server) Run(mux *ServerMux) error {
 		mux.SetGlobalRateLimit(s.config.RateLimitConfig)
 	}
 
-	if err := s.asynqServer.Run(mux.asynqServerMux(s.gormDB)); err != nil {
+	asynqMux := mux.asynqServerMux(s.gormDB, s.config.Logger)
+
+	mux.sweepAllExpiredTasks()
+
+	if err := s.asynqServer.Run(asynqMux); err != nil {
 		return fmt.Errorf(":s.asynqServer.Run %w", err)
 	}
 

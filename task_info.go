@@ -20,6 +20,11 @@ const (
 	TaskInfoStatusFailed TaskInfoStatus = "failed"
 )
 
+// expiredTaskResult is written to the result column of the rows reclaimed by
+// the sweeps, so that a failed status coming from a dead process can be told
+// apart from a task that genuinely returned an error.
+const expiredTaskResult = "expired: task did not report completion before its deadline"
+
 // TaskInfo is the definition for the status of a task.
 type TaskInfo struct {
 	ID       string
@@ -40,11 +45,12 @@ func (t *TaskInfo) toDBTaskInfo() *dbTaskInfo {
 }
 
 type dbTaskInfo struct {
-	ID       string `gorm:"primaryKey"`
-	TaskType string `gorm:"size:255;index"`
-	Payload  string `gorm:"type:text"`
-	Status   string `gorm:"default:'pending';index"`
-	Result   string `gorm:"type:text"`
+	ID        string `gorm:"primaryKey"`
+	TaskType  string `gorm:"size:255;index"`
+	Payload   string `gorm:"type:text"`
+	Status    string `gorm:"default:'pending';index"`
+	Result    string `gorm:"type:text"`
+	ExpiresAt *time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
